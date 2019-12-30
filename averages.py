@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Union
+from collections import deque
 import unittest
 
 class EWMA:
@@ -20,6 +21,21 @@ class EWMA:
             return self._x
         else:
             raise ValueError("Called get on EWMA without any insertion and no initial value.")
+
+class DelayedStat:
+
+    def __init__(self, underlying, delay: int):
+        self._underlying = underlying
+        self._delay = delay
+        self._buffer = deque(maxlen=self._delay)
+
+    def update(self, x):
+        if len(self._buffer) == self._delay:
+            self._underlying.update(self._buffer.popleft())
+        self._buffer.append(x)
+
+    def get(self):
+        return self._underlying.get()
 
 class TestEWMA(unittest.TestCase):
 
@@ -68,4 +84,43 @@ class TestEWMA(unittest.TestCase):
         for _ in range(10):
             ewma.update(20.0)
         np.testing.assert_almost_equal(ewma.get(), 20.0 + (10.0 - 20.0)/4.0, decimal=14)
+
+class TestDelayedStat(unittest.TestCase):
+
+    def test_ewma_delay(self):
+        ewma = EWMA(halflife=1.0)
+        delayed_ewma = DelayedStat(underlying=ewma, delay=2)
+
+        self.assertRaises(ValueError)
+        delayed_ewma.update(1.0)
+        self.assertRaises(ValueError)
+        delayed_ewma.update(2.0)
+        # Two updates, still in the buffer
+        self.assertRaises(ValueError)
+
+        delayed_ewma.update(2.0)
+        # Value 1.0 has now entered EWMA
+        np.testing.assert_almost_equal(delayed_ewma.get(), 1.0, decimal=14)
+
+        delayed_ewma.update(2.0)
+        np.testing.assert_almost_equal(delayed_ewma.get(), (1.0 + 2.0)/2.0, decimal=14)
+
+    def test_ewma_delay_with_init(self):
+        ewma = EWMA(halflife=1.0, initial_value=0.0)
+        delayed_ewma = DelayedStat(underlying=ewma, delay=2)
+
+        self.assertEqual(delayed_ewma.get(), 0.0)
+        delayed_ewma.update(1.0)
+        self.assertEqual(delayed_ewma.get(), 0.0)
+        delayed_ewma.update(2.0)
+        # Two updates, still in the buffer
+        self.assertEqual(delayed_ewma.get(), 0.0)
+
+        delayed_ewma.update(10.0)
+        # Value 1.0 has now entered EWMA
+        np.testing.assert_almost_equal(delayed_ewma.get(), 1.0/2.0, decimal=14)
+
+        # Value 2.0 has now entered EWMA
+        delayed_ewma.update(10.0)
+        np.testing.assert_almost_equal(delayed_ewma.get(), 1.0/2.0 + (2.0 - 1.0/2.0)/2.0, decimal=14)
 
