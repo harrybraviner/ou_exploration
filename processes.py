@@ -32,13 +32,14 @@ class OUProcess:
 
 class OUProcessWithMemory:
 
-    def __init__(self, decay_theta, sigma, initial_value: np.ndarray, av_halflife: int=30, av_delay: int=10, random_seed: int=1234):
+    def __init__(self, decay_theta, sigma, initial_value: np.ndarray, av_halflife: int=30, av_delay: int=10, av_sign: float=1.0, random_seed: int=1234):
 
         self._rng = np.random.RandomState(random_seed)
         self._decay_theta = decay_theta
         self._sigma = sigma
         self._av_halflife = av_halflife
         self._av_delay = av_delay
+        self._av_sign = av_sign
 
         self._initial_value = initial_value.copy()
         self._state = self._initial_value.copy()
@@ -61,7 +62,7 @@ class OUProcessWithMemory:
             av.update(s)
 
         self._state *= (1.0 - self._decay_theta)
-        self._state += (self._decay_theta) * av_state
+        self._state += (self._decay_theta) * self._av_sign * av_state
         self._state += noise
 
         return self._state.copy()
